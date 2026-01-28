@@ -165,6 +165,7 @@ def draw_game_over():
     display_surf.blit(restart_text, restart_rect)
 
 #general setup
+
 pygame.init()
 EXIT_BTN_SIZE = (140, 50)
 EXIT_BTN_MARGIN = 16
