@@ -13,7 +13,7 @@ class Player(pygame.sprite.Sprite):
         #cooldown for laser
         self.can_shoot = True
         self.laser_shoot_time = 0
-        self.cooldown_duration = 400
+        self.cooldown_duration = 600
 
         
 
@@ -89,7 +89,13 @@ def colisions():
 
     colision_sprites = pygame.sprite.spritecollide(player, meteor_sprites,True,pygame.sprite.collide_mask)
     if colision_sprites:
-        running = False
+        global lives, game_over
+        lives -= 1
+        damage_sound.play()
+        if lives <= 0:
+            global final_score
+            final_score = (pygame.time.get_ticks() - start_time) // 100
+            game_over = True
 
     for laser in laser_sprites:
         collided_sprites = pygame.sprite.spritecollide(laser, meteor_sprites,True)
@@ -98,18 +104,80 @@ def colisions():
             AnimatedExplosion(explosion_frames,laser.rect.midtop,all_sprites)
            
 def display_score():
-    current_time = pygame.time.get_ticks() //100
+    current_time = (pygame.time.get_ticks() - start_time) // 100
     text_surf = font.render(str(current_time),True,(240,240,240))
     text_rect = text_surf.get_frect(midbottom = (window_width/2, window_height - 50))
     display_surf.blit(text_surf,text_rect)
     pygame.draw.rect(display_surf,(240,240,240), text_rect.inflate(20,10).move(0,-8),5,10)
 
+def draw_exit_button(surface, rect):
+    mouse_pos = pygame.mouse.get_pos()
+    hovered = rect.collidepoint(mouse_pos)
+
+    # simple button
+    pygame.draw.rect(surface, (200, 70, 70) if hovered else (170, 55, 55), rect, border_radius=12)
+    pygame.draw.rect(surface, (240, 240, 240), rect, 3, border_radius=12)
+
+    label = font.render("EXIT", True, (240, 240, 240))
+    label_rect = label.get_rect(center=rect.center)
+    surface.blit(label, label_rect)
+
+def restart_game():
+    global lives, game_over, start_time, final_score
+
+    lives = 3
+    game_over = False
+    start_time = pygame.time.get_ticks()
+    final_score = 0
+
+    meteor_sprites.empty()
+    laser_sprites.empty()
+
+    player.rect.center = (window_width//2, window_height//2)
+
+
+def draw_game_over():
+    overlay = pygame.Surface((window_width, window_height))
+    overlay.set_alpha(180)
+    overlay.fill((0,0,0))
+    display_surf.blit(overlay, (0,0))
+
+    score = final_score
+
+    title = font.render("GAME OVER", True, (255,80,80))
+    score_text = font.render(f"Score: {score}", True, (240,240,240))
+
+    title_rect = title.get_rect(center=(window_width//2, window_height//2 - 80))
+    score_rect = score_text.get_rect(center=(window_width//2, window_height//2 - 20))
+
+    display_surf.blit(title, title_rect)
+    display_surf.blit(score_text, score_rect)
+
+    # Exit button
+    draw_exit_button(display_surf, exit_btn_rect)
+
+    # Restart button
+    pygame.draw.rect(display_surf, (70,160,70), restart_btn_rect, border_radius=12)
+    pygame.draw.rect(display_surf, (240,240,240), restart_btn_rect, 3, border_radius=12)
+
+    restart_text = font.render("RESTART", True, (240,240,240))
+    restart_rect = restart_text.get_rect(center=restart_btn_rect.center)
+    display_surf.blit(restart_text, restart_rect)
+
 #general setup
 pygame.init()
+EXIT_BTN_SIZE = (140, 50)
+EXIT_BTN_MARGIN = 16
 window_width,window_height = 1280,720
 display_surf = pygame.display.set_mode((window_width,window_height))
+exit_btn_rect = pygame.Rect(window_width - EXIT_BTN_SIZE[0] - EXIT_BTN_MARGIN,EXIT_BTN_MARGIN,EXIT_BTN_SIZE[0],EXIT_BTN_SIZE[1])
+restart_btn_rect = pygame.Rect(window_width//2 - 100,window_height//2 + 60,200,50)
 pygame.display.set_caption("Space Shooter")
 running = True
+lives = 3
+game_over = False
+start_time = pygame.time.get_ticks()
+final_score = 0
 clock = pygame.time.Clock()
 
 #imports
@@ -119,6 +187,9 @@ laser_surf = pygame.image.load("images/laser.png").convert_alpha()
 font = pygame.font.Font("images/Oxanium-Bold.ttf",40)
 explosion_frames = [pygame.image.load(f"images/explosion/{i}.png").convert_alpha() for i in range(21)]
 
+
+damage_sound = pygame.mixer.Sound("audio/damage.ogg")
+damage_sound.set_volume(0.35)
 laser_sound = pygame.mixer.Sound("audio/laser.ogg")
 laser_sound.set_volume(0.2)
 explosion_sound = pygame.mixer.Sound("audio/explosion.ogg")
@@ -146,6 +217,17 @@ async def main():
         dt =clock.tick() / 1000
         #event loop
         for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if game_over:
+                    if exit_btn_rect.collidepoint(event.pos):
+                        running = False
+                    if restart_btn_rect.collidepoint(event.pos):
+                        restart_game()
+                else:
+                    if exit_btn_rect.collidepoint(event.pos):
+                        running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE and player.can_shoot:
                     Laser(laser_surf, player.rect.midtop, (all_sprites, laser_sprites))
@@ -159,15 +241,19 @@ async def main():
                 x,y = randint(0,window_width), randint(-200,-100)
                 Meteor(meteor_surf,(x,y),(all_sprites,meteor_sprites))
         #update  
-        all_sprites.update(dt)
-        colisions()
+        if not game_over:
+            all_sprites.update(dt)
+            colisions()
         await asyncio.sleep(0)
 
         #draw the game
         display_surf.fill("#3a2e3f")
         all_sprites.draw(display_surf)
-
-        display_score()
+        if game_over:
+            draw_game_over()
+        else:
+            draw_exit_button(display_surf, exit_btn_rect)
+            display_score()
         pygame.display.update()
 
 asyncio.run(main())
