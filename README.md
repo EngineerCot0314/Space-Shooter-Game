@@ -59,10 +59,11 @@ python main.py
 
 ---
 
-### Developer
+### Developement
 
 Created by Hasnain (EngineerCot)  
 GitHub: https://github.com/EngineerCot0314  
+Used ChatGPT for simple debugging alongside my beginner expertise.
 
 ---
 
